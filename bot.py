@@ -1,145 +1,158 @@
-# -*- coding: utf-8 -*-
-from telegram import Update
+import logging
+import random
+from telegram import (
+    Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup,
+    KeyboardButton, ReplyKeyboardRemove
+)
 from telegram.ext import (
-    ApplicationBuilder, CommandHandler, MessageHandler,
-    ContextTypes, ConversationHandler, filters
+    Application, CommandHandler, MessageHandler, filters, ContextTypes,
+    ConversationHandler
 )
 
-BOT_TOKEN = "7069586996:AAG5A-LLSWaQrLQ9EqM8_JihaQI3I90bFik"
-SELLER_CHAT_ID = "7241783674"
+# Enable logging
+logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-FOOD_AMOUNT, TAX, DISTANCE, CONFIRM = range(4)
+# Stages
+AMOUNT, CONFIRM, ADDRESS, SCREENSHOT = range(4)
 
-# Start command
+# Seller chat ID (replace with your actual Telegram ID)
+SELLER_ID = 7241783674
+
+# Permanent reply buttons
+main_keyboard = ReplyKeyboardMarkup(
+    [
+        [KeyboardButton("Order"), KeyboardButton("Contact")],
+        [KeyboardButton("Language"), KeyboardButton("Menu")],
+        [KeyboardButton("Help"), KeyboardButton("Cancel")]
+    ],
+    resize_keyboard=True
+)
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Kripya food amount ₹ me bataye (min ₹199)")
-    return FOOD_AMOUNT
+    await update.message.reply_text(
+        "स्वागत है! Order देने के लिए 'Order' दबाएं या /order कमांड का इस्तेमाल करें।",
+        reply_markup=main_keyboard
+    )
 
-# Get food amount
-async def get_food_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def order_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [[InlineKeyboardButton("Order Now", web_app= {"url": "https://katiharvloger.github.io/Order"})]]
+    await update.message.reply_text("Order के लिए नीचे क्लिक करें:", reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def handle_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("कृपया अपना कुल ऑर्डर अमाउंट भेजें (₹ में):", reply_markup=ReplyKeyboardRemove())
+    return AMOUNT
+
+async def amount_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        food = int(update.message.text)
-        if food < 199:
-            await update.message.reply_text("Minimum order ₹199 hona chahiye. Wapas ₹ amount bhejein.")
-            return FOOD_AMOUNT
-        context.user_data["food_amount"] = food
-        await update.message.reply_text("Ab tax amount ₹ me bataye:")
-        return TAX
-    except:
-        await update.message.reply_text("Sirf number bhejein jaise: 250")
-        return FOOD_AMOUNT
+        amount = int(update.message.text)
+        if amount < 199:
+            await update.message.reply_text("कम से कम ₹199 का ऑर्डर ज़रूरी है। कृपया दुबारा कोशिश करें।")
+            return AMOUNT
 
-# Get tax
-async def get_tax(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        tax = int(update.message.text)
-        context.user_data["tax"] = tax
-        await update.message.reply_text("Delivery distance kitna km hai? (max 7 km)")
-        return DISTANCE
-    except:
-        await update.message.reply_text("Sirf number bhejein jaise: 15")
-        return TAX
-
-# Get distance
-async def get_distance(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        distance = float(update.message.text)
-        if distance > 7:
-            await update.message.reply_text("Max delivery distance 7 km allowed hai.")
-            return DISTANCE
-        context.user_data["distance"] = distance
-
-        food = context.user_data["food_amount"]
-        tax = context.user_data["tax"]
-
-        # Discount rules
         discount = 0
-        if food >= 199:
+        extra = 0
+        if 199 <= amount <= 248:
             discount = 90
-        elif food >= 249:
+            extra = 15
+        elif 249 <= amount <= 298:
             discount = 110
-        elif food >= 299:
+        elif amount >= 299:
             discount = 125
 
+        final_amount = amount - discount + extra
+        context.user_data["order_amount"] = amount
         context.user_data["discount"] = discount
-
-        # Extra charges
-        extra = 0
-        if food < 249:
-            extra = 15
         context.user_data["extra"] = extra
-
-        # Final amount
-        final = food + tax + extra - discount
-        context.user_data["final"] = final
+        context.user_data["final_amount"] = final_amount
 
         await update.message.reply_text(
-            f"""Order Detail:
-🍱 Food: ₹{food}
-🧾 Tax: ₹{tax}
-📍 Distance: {distance} km
-💸 Discount: ₹{discount}
-➕ Extra: ₹{extra}
-✅ Final Total: ₹{final}
-
-Aap order confirm karna chahte ho? (yes/no)"""
+            f"Discount: ₹{discount}\nExtra Charge: ₹{extra}\nFinal Amount: ₹{final_amount}\n\nOrder Confirm karein? (yes/no)"
         )
         return CONFIRM
 
-    except:
-        await update.message.reply_text("Sirf number bhejein jaise: 2.5")
-        return DISTANCE
+    except ValueError:
+        await update.message.reply_text("कृपया एक वैध नंबर भेजें।")
+        return AMOUNT
 
-# Confirm order
-async def confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    reply = update.message.text.lower()
-    if "yes" in reply:
-        data = context.user_data
-        msg = (
-            f"🛒 *New Order Received!*\n\n"
-            f"🍱 *Food:* ₹{data['food_amount']}\n"
-            f"🧾 *Tax:* ₹{data['tax']}\n"
-            f"📍 *Distance:* {data['distance']} km\n"
-            f"💸 *Discount:* ₹{data['discount']}\n"
-            f"➕ *Extra:* ₹{data['extra']}\n"
-            f"✅ *Final Total:* ₹{data['final']}\n\n"
-            f"⚠️ Screenshot & Address not collected yet!"
+async def confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.text.lower() == "yes":
+        await update.message.reply_text("अब कृपया अपना address link भेजें।")
+        return ADDRESS
+    else:
+        await update.message.reply_text("ऑर्डर रद्द कर दिया गया।", reply_markup=main_keyboard)
+        return ConversationHandler.END
+
+async def address(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["address"] = update.message.text
+    await update.message.reply_text("अब कृपया अपने cart का screenshot भेजें।")
+    return SCREENSHOT
+
+async def screenshot(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.message.photo:
+        context.user_data["screenshot"] = update.message.photo[-1].file_id
+
+        order_id = f"ORD{random.randint(1000,9999)}"
+        context.user_data["order_id"] = order_id
+
+        user = update.message.from_user
+        amount = context.user_data["order_amount"]
+        discount = context.user_data["discount"]
+        extra = context.user_data["extra"]
+        final = context.user_data["final_amount"]
+        address = context.user_data["address"]
+
+        # Send confirmation to customer
+        await update.message.reply_text(
+            f"धन्यवाद! आपका Order Confirm हो गया है।\n\n"
+            f"Order ID: {order_id}\nFinal Amount: ₹{final}\n\n"
+            "Delivery जल्द ही की जाएगी!",
+            reply_markup=main_keyboard
         )
-        await context.bot.send_message(chat_id=7241783674, text=msg, parse_mode="Markdown")
-        await update.message.reply_text("Order confirm ho gaya bhai! Screenshot aur address alag se bhej dena seller ko /contact use karo aur bhejo cart ka screenshot and address link.")
-    elif "no" in reply:
-        await update.message.reply_text("Order cancel kar diya gaya. Agar kuch aur poochhna hai to /contact karo.")
-    return ConversationHandler.END
 
-# Contact seller
-async def contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Seller se baat karne ke liye yeh link use karo:\n👉 https://t.me/katiharvloger2")
+        # Send to seller
+        await context.bot.send_message(
+            chat_id=SELLER_ID,
+            text=(
+                f"नया Order आया है!\n\n"
+                f"Order ID: {order_id}\n"
+                f"User ID: {user.id}\nUsername: @{user.username or 'N/A'}\n"
+                f"Amount: ₹{amount}\nDiscount: ₹{discount}\nExtra Charge: ₹{extra}\nFinal Amount: ₹{final}\n"
+                f"Address: {address}"
+            )
+        )
+        await context.bot.send_photo(chat_id=SELLER_ID, photo=context.user_data["screenshot"])
 
-# Cancel fallback
+        return ConversationHandler.END
+    else:
+        await update.message.reply_text("कृपया एक valid screenshot भेजें।")
+        return SCREENSHOT
+
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Order process cancel kar diya gaya.")
+    await update.message.reply_text("कार्रवाई रद्द कर दी गई।", reply_markup=main_keyboard)
     return ConversationHandler.END
 
-# Main function
-def main():
-    app = ApplicationBuilder().token(BOT_TOKEN).build()
+if __name__ == "__main__":
+    from telegram.ext import ApplicationBuilder
 
-    conv = ConversationHandler(
-        entry_points=[CommandHandler("start", start)],
+    app = ApplicationBuilder().token("7069586996:AAG5A-LLSWaQrLQ9EqM8_JihaQI3I90bFik").build()
+
+    conv_handler = ConversationHandler(
+        entry_points=[
+            CommandHandler("start", start),
+            MessageHandler(filters.Regex("^Order$"), handle_order)
+        ],
         states={
-            FOOD_AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_food_amount)],
-            TAX: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_tax)],
-            DISTANCE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_distance)],
-            CONFIRM: [MessageHandler(filters.TEXT & ~filters.COMMAND, confirm_order)],
+            AMOUNT: [MessageHandler(filters.TEXT & ~filters.COMMAND, amount_input)],
+            CONFIRM: [MessageHandler(filters.TEXT & ~filters.COMMAND, confirm)],
+            ADDRESS: [MessageHandler(filters.TEXT & ~filters.COMMAND, address)],
+            SCREENSHOT: [MessageHandler(filters.PHOTO, screenshot)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
 
-    app.add_handler(conv)
-    app.add_handler(CommandHandler("contact", contact))
+    app.add_handler(conv_handler)
+    app.add_handler(CommandHandler("order", order_command))
+    app.add_handler(CommandHandler("cancel", cancel))
 
     app.run_polling()
-
-if __name__ == "__main__":
-    main()
-        
