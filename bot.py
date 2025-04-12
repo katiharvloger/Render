@@ -1,144 +1,108 @@
-import logging
-from telegram import Update, ReplyKeyboardMarkup
-from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters, ConversationHandler
-from datetime import datetime
-import random
+# -*- coding: utf-8 -*-
+from telegram import Update
+from telegram.ext import (
+    ApplicationBuilder, CommandHandler, MessageHandler,
+    ContextTypes, ConversationHandler, filters
+)
 
-# Constants
 BOT_TOKEN = "7069586996:AAG5A-LLSWaQrLQ9EqM8_JihaQI3I90bFik"
-SELLER_CHAT_ID = 7241783674
+SELLER_CHAT_ID = "7241783674"
 
-# Conversation steps
 FOOD_AMOUNT, TAX, DISTANCE, CONFIRM = range(4)
-
-# Enable logging
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-
-# User data storage
-user_orders = {}
-
-# Helper
-def generate_order_id():
-    return f"ORD{random.randint(1000,9999)}"
 
 # Start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Namaste! Welcome to Swiggy Order Assistant.")
-
-Aap kya order karna chahenge?
-Kripya food amount ₹ me bataye (min ₹199)"
-    )
+    await update.message.reply_text("Kripya food amount ₹ me bataye (min ₹199)")
     return FOOD_AMOUNT
 
-# Step 1: Food Amount
+# Get food amount
 async def get_food_amount(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        amount = float(update.message.text.strip())
-        if amount < 199:
-            await update.message.reply_text("Amount ₹199 se kam hai bhai! Thoda aur add karo.")
+        food = int(update.message.text)
+        if food < 199:
+            await update.message.reply_text("Minimum order ₹199 hona chahiye. Wapas ₹ amount bhejein.")
             return FOOD_AMOUNT
-        context.user_data["food_amount"] = amount
-        await update.message.reply_text("GST + Platform Fee mila ke tax amount bataye (₹ me):")
+        context.user_data["food_amount"] = food
+        await update.message.reply_text("Ab tax amount ₹ me bataye:")
         return TAX
     except:
-        await update.message.reply_text("Sahi number dalo bhai, sirf ₹ amount.")
+        await update.message.reply_text("Sirf number bhejein jaise: 250")
         return FOOD_AMOUNT
 
-# Step 2: Tax
+# Get tax
 async def get_tax(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        tax = float(update.message.text.strip())
+        tax = int(update.message.text)
         context.user_data["tax"] = tax
-        await update.message.reply_text("Delivery distance kitna hai (km me)? (max 7 km):")
+        await update.message.reply_text("Delivery distance kitna km hai? (max 7 km)")
         return DISTANCE
     except:
-        await update.message.reply_text("Sahi tax amount dalo (₹ me).")
+        await update.message.reply_text("Sirf number bhejein jaise: 15")
         return TAX
 
-# Step 3: Distance
+# Get distance
 async def get_distance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        dist = float(update.message.text.strip())
-        if dist > 7:
-            await update.message.reply_text("Sirf 7 km tak hi delivery hai bhai!")
+        distance = float(update.message.text)
+        if distance > 7:
+            await update.message.reply_text("Max delivery distance 7 km allowed hai.")
             return DISTANCE
-        context.user_data["distance"] = dist
+        context.user_data["distance"] = distance
 
-        # Calculate
-        amount = context.user_data["food_amount"]
+        food = context.user_data["food_amount"]
         tax = context.user_data["tax"]
-        total = amount + tax
+
+        # Discount rules
         discount = 0
+        if food >= 999:
+            discount = 100
+        elif food >= 599:
+            discount = 50
+        elif food >= 299:
+            discount = 20
+
+        context.user_data["discount"] = discount
+
+        # Extra charges
         extra = 0
+        if distance > 3:
+            extra = (distance - 3) * 10
+        context.user_data["extra"] = extra
 
-        if total >= 299:
-            discount = 125
-        elif total >= 199:
-            discount = 90
-            extra = 15
-
-        final = total - discount + extra
-        context.user_data.update({
-            "discount": discount,
-            "extra": extra,
-            "final": final,
-            "order_id": generate_order_id(),
-            "timestamp": datetime.now().strftime("%d-%m-%Y %H:%M:%S")
-        })
+        # Final amount
+        final = food + tax + extra - discount
+        context.user_data["final"] = final
 
         await update.message.reply_text(
-            f"Calculation ho gaya bhai!
+            f"""Order Detail:
+🍱 Food: ₹{food}
+🧾 Tax: ₹{tax}
+📍 Distance: {distance} km
+💸 Discount: ₹{discount}
+➕ Extra: ₹{extra}
+✅ Final Total: ₹{final}
 
-"
-            f"Food: ₹{amount}
-Tax: ₹{tax}
-Discount: ₹{discount}
-Extra: ₹{extra}
-"
-            f"Final Amount: ₹{final}
-
-"
-            f"Agar rate thik na lage, to /contact type karo.
-
-Order confirm karna hai? (haan/na)"
+Aap order confirm karna chahte ho? (haan/nahin)"""
         )
         return CONFIRM
+
     except:
-        await update.message.reply_text("Please enter valid distance (km me)")
+        await update.message.reply_text("Sirf number bhejein jaise: 2.5")
         return DISTANCE
 
-# Step 4: Confirm Order
+# Confirm order
 async def confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.lower()
-    if "haan" in text or "yes" in text:
+    reply = update.message.text.lower()
+    if "haan" in reply:
         data = context.user_data
         msg = (
-            f"🛒 *New Order Received!*
-
-"
-            f"👤 *User:* @{update.effective_user.username or 'N/A'}
-"
-            f"🆔 *User ID:* {update.effective_user.id}
-"
-            f"🆔 *Order ID:* {data['order_id']}
-"
-            f"🕒 *Time:* {data['timestamp']}
-
-"
-            f"🍱 *Food:* ₹{data['food_amount']}
-"
-            f"🧾 *Tax:* ₹{data['tax']}
-"
-            f"📍 *Distance:* {data['distance']} km
-"
-            f"💸 *Discount:* ₹{data['discount']}
-"
-            f"➕ *Extra:* ₹{data['extra']}
-"
-            f"✅ *Final Total:* ₹{data['final']}
-
-"
+            f"🛒 *New Order Received!*\n\n"
+            f"🍱 *Food:* ₹{data['food_amount']}\n"
+            f"🧾 *Tax:* ₹{data['tax']}\n"
+            f"📍 *Distance:* {data['distance']} km\n"
+            f"💸 *Discount:* ₹{data['discount']}\n"
+            f"➕ *Extra:* ₹{data['extra']}\n"
+            f"✅ *Final Total:* ₹{data['final']}\n\n"
             f"⚠️ Screenshot & Address not collected yet!"
         )
         await context.bot.send_message(chat_id=SELLER_CHAT_ID, text=msg, parse_mode="Markdown")
@@ -149,15 +113,14 @@ async def confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Contact seller
 async def contact(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Seller se baat karne ke liye yeh link use karo:
-👉 https://t.me/katiharvloger2")
+    await update.message.reply_text("Seller se baat karne ke liye yeh link use karo:\n👉 https://t.me/katiharvloger2")
 
 # Cancel fallback
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Order process cancel kar diya gaya.")
     return ConversationHandler.END
 
-# Main
+# Main function
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
@@ -179,3 +142,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+        
