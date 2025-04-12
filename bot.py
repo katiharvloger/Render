@@ -24,7 +24,7 @@ def generate_order_id():
 # Start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Namaste! Welcome to Swiggy Order Assistant.
+        "Namaste! Welcome to Swiggy Order Assistant.")
 
 Aap kya order karna chahenge?
 Kripya food amount ₹ me bataye (min ₹199)"
