@@ -53,20 +53,20 @@ async def get_distance(update: Update, context: ContextTypes.DEFAULT_TYPE):
         tax = context.user_data["tax"]
 
         # Discount rules
-        discount = 0
-        if food >= 999:
-            discount = 100
-        elif food >= 599:
-            discount = 50
+        discount = 90
+        if food >= 199:
+            discount = 110
+        elif food >= 249:
+            discount = 125
         elif food >= 299:
-            discount = 20
+            discount = 0
 
         context.user_data["discount"] = discount
 
         # Extra charges
         extra = 0
-        if distance > 3:
-            extra = (distance - 3) * 10
+        if food > 249:
+            extra = 15
         context.user_data["extra"] = extra
 
         # Final amount
@@ -82,7 +82,7 @@ async def get_distance(update: Update, context: ContextTypes.DEFAULT_TYPE):
 ➕ Extra: ₹{extra}
 ✅ Final Total: ₹{final}
 
-Aap order confirm karna chahte ho? (haan/nahin)"""
+Aap order confirm karna chahte ho? (yes/no)"""
         )
         return CONFIRM
 
@@ -93,7 +93,7 @@ Aap order confirm karna chahte ho? (haan/nahin)"""
 # Confirm order
 async def confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply = update.message.text.lower()
-    if "haan" in reply:
+    if "yes" in reply:
         data = context.user_data
         msg = (
             f"🛒 *New Order Received!*\n\n"
@@ -105,9 +105,9 @@ async def confirm_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"✅ *Final Total:* ₹{data['final']}\n\n"
             f"⚠️ Screenshot & Address not collected yet!"
         )
-        await context.bot.send_message(chat_id=SELLER_CHAT_ID, text=msg, parse_mode="Markdown")
-        await update.message.reply_text("Order confirm ho gaya bhai! Screenshot aur address alag se bhej dena seller ko.")
-    else:
+        await context.bot.send_message(chat_id=7241783674, text=msg, parse_mode="Markdown")
+        await update.message.reply_text("Order confirm ho gaya bhai! Screenshot aur address alag se bhej dena seller ko /contact use karo aur bhejo cart ka screenshot and address link.")
+    elif "no" in reply:
         await update.message.reply_text("Order cancel kar diya gaya. Agar kuch aur poochhna hai to /contact karo.")
     return ConversationHandler.END
 
