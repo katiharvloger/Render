@@ -53,19 +53,19 @@ async def get_distance(update: Update, context: ContextTypes.DEFAULT_TYPE):
         tax = context.user_data["tax"]
 
         # Discount rules
-        discount = 90
+        discount = 0
         if food >= 199:
-            discount = 110
+            discount = 90
         elif food >= 249:
-            discount = 125
+            discount = 110
         elif food >= 299:
-            discount = 0
+            discount = 125
 
         context.user_data["discount"] = discount
 
         # Extra charges
         extra = 0
-        if food > 249:
+        if food < 249:
             extra = 15
         context.user_data["extra"] = extra
 
